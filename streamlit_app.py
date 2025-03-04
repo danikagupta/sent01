@@ -38,6 +38,7 @@ models={
 }
 
 PROMPT_FILE='data/prompts.csv'
+RESULT_FILE='data/results.csv'
 
 def apply_model(model,user_input):
     try:
@@ -91,10 +92,23 @@ if df is not None:
                     rsp = apply_model(model_selected,user_input)
                     results.append({'model':model_choice,'prompt':user_input,'response':rsp})
                     current_count+=1
-                    progress_bar.progress( (1.0*current_count) / (run_count*len(models)*df.shape[0]) )
+                    progress_bar.progress( (1.0*current_count) / total_count)
                     #st.write(f"Record: {index=},{user_input=},{rsp=}")
         update_ui.write(f"All done!!")
         result_df=pd.DataFrame(results)
         st.dataframe(result_df,hide_index=True)
+        if current_count>0:
+            if os.path.exists(RESULT_FILE):
+                result_df.to_csv(RESULT_FILE,mode='a', index=False, header=False)
+            else:
+                result_df.to_csv(RESULT_FILE, index=False)
+            with open(RESULT_FILE, "rb") as file:
+                file_bytes = file.read()
+            st.download_button(
+                label="Download data as CSV",
+                data=file_bytes,
+                file_name="complete_set.csv",
+                mime="text/csv",
+            )
   
 
