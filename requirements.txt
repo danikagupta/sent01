@@ -1,2 +1,15 @@
 streamlit
+langchain
+openai
+numpy
 pandas
+langchain_community 
+langchain-core 
+langgraph 
+
+langchain-openai
+langchain-anthropic
+langchain-google-genai
+langchain-xai
+langchain-huggingface
+langchain-groq
