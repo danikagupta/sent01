@@ -9,7 +9,7 @@ from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_groq import ChatGroq
 
 
-from langchain_core.pydantic_v1 import BaseModel
+from pydantic.v1 import BaseModel
 from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, AIMessage, ChatMessage
 
 import pandas as pd
@@ -23,19 +23,21 @@ os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
 
 models={
 
-    #"gpt-4o-mini": ChatOpenAI(model="gpt-4o-mini"),
-    #"claude-sonnet": ChatAnthropic(model="claude-3-5-sonnet-20240620"),
-    #"gemini-1.5-pro": ChatGoogleGenerativeAI(model="gemini-1.5-pro"),
+    "gpt-4o-mini": ChatOpenAI(model="gpt-4o-mini"),
+    "claude-sonnet": ChatAnthropic(model="claude-3-5-sonnet-20240620"),
+    "gemini-1.5-pro": ChatGoogleGenerativeAI(model="gemini-1.5-pro"),
 
-    #"grok-2-latest": ChatXAI(model="grok-2-latest"),
+    "grok-2-latest": ChatXAI(model="grok-2-latest"),
     #"llama": HuggingFaceEndpoint(repo_id="meta-llama/Llama-2-70b-chat-hf",task="text-generation",max_new_tokens=512,temperature=0.7),
-    #"llama":ChatGroq(model="llama-3.3-70b-versatile"),
+    "llama":ChatGroq(model="llama-3.3-70b-versatile"),
     "deepseek":ChatGroq(model="deepseek-r1-distill-llama-70b"),
     
     #"gpt-4o": ChatOpenAI(model="gpt-4o"),
     #"claude-haiku": ChatAnthropic(model="claude-3-haiku-20240307"),
 
 }
+
+PROMPT_FILE='data/prompts.csv'
 
 def apply_model(model,user_input):
     try:
@@ -47,36 +49,52 @@ def apply_model(model,user_input):
         return response.content
     except Exception as e:
         return f"Error: {e}"
+    
+def read_file_from_ui_or_fs():
+    with st.sidebar:
+        uploaded_file = st.file_uploader("Upload a prompt file", type=["csv"])
+
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        df.to_csv(PROMPT_FILE,index=False)
+        return df
+    else:
+        if os.path.exists(PROMPT_FILE):
+            df=pd.read_csv(PROMPT_FILE)
+            return df
+    return None
+
 
 st.title("Sentio")
-df = None
-
-uploaded_file = st.file_uploader("Upload prompt file", type=["csv", "xlsx"])
-
-if uploaded_file is not None:
-    # Check the file type and read it into a DataFrame
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    elif uploaded_file.name.endswith('.xlsx'):
-        df = pd.read_excel(uploaded_file)
-    else:
-        st.error("Unsupported file type")
-        df = None
-
+update_ui=st.empty()
+df = read_file_from_ui_or_fs()
+    
 if df is not None:
-    with st.expander("Input prompts"):
+    with st.sidebar.expander("Prompts"):
         st.dataframe(df, hide_index=True)
-    if st.button("Run"):
-        for model_choice in models.keys():
-            model_selected=models[model_choice]
-            st.write(f"Running model: {model_choice}")
-            for index,row in df.iterrows():
-                user_input=row['Prompt']
-                rsp = apply_model(model_selected,user_input)
-                st.write(f"Record: {index=},{user_input=},{rsp=}")
-                break
+    options = st.sidebar.multiselect('Models',options=list(models.keys()),default=list(models.keys()))
+    model_list={key:models[key] for key in options}
+    run_count=st.sidebar.number_input("Runs",min_value=1,max_value=100, value=1)
+    if st.sidebar.button("Run"):
+        update_ui.write(f"Starting run with {run_count=} for {models=}")
+        current_count=0
+        total_count=run_count*len(model_list)*df.shape[0]
+        progress_bar=st.progress(current_count)
+        results=[]
+        for i in range(1,run_count+1):
+            for model_choice in model_list.keys():
+                model_selected=models[model_choice]
+
+                for index,row in df.iterrows():
+                    user_input=row['Prompt']
+                    update_ui.write(f"Completed {current_count}/{total_count} steps. {i=}, {model_choice=}, {user_input=}")
+                    rsp = apply_model(model_selected,user_input)
+                    results.append({'model':model_choice,'prompt':user_input,'response':rsp})
+                    current_count+=1
+                    progress_bar.progress( (1.0*current_count) / (run_count*len(models)*df.shape[0]) )
+                    #st.write(f"Record: {index=},{user_input=},{rsp=}")
+        update_ui.write(f"All done!!")
+        result_df=pd.DataFrame(results)
+        st.dataframe(result_df,hide_index=True)
   
-        #st.write("Completed all models")
-        #df.to_csv("Sentio_outputs.csv",index=False)
-        #with st.expander("Output"):
-        st.dataframe(df, hide_index=True)
+
