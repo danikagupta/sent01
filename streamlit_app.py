@@ -13,8 +13,12 @@ from langchain_core.messages import AnyMessage, SystemMessage, HumanMessage, AIM
 
 import pandas as pd
 
+import time
+from datetime import datetime
+
 PROMPT_FILE='data/prompts.csv'
 RESULT_FILE='data/results.csv'
+current_date = datetime.now().strftime("%Y-%m-%d")
 
 def initialize_models():
 
@@ -45,14 +49,15 @@ def initialize_models():
 
 def apply_model(model,user_input):
     try:
+        start_time=time.time()
         user_message=HumanMessage(content=f"{user_input}")
-        #system_message=SystemMessage(content=f"{prompt} Relevant Content:\n\n {ai_text}\n")
-        #ai_message=SystemMessage(content=f"Relevant Content:\n\n {ai_text}\n")
         messages = [user_message]
         response=model.invoke(messages)
-        return response.content
+        end_time=time.time()
+        elapsed_time=end_time-start_time
+        return response.content, elapsed_time
     except Exception as e:
-        return f"Error: {e}"
+        return f"Error: {e}",0
     
 def read_file_from_ui_or_fs():
     with st.sidebar:
@@ -70,14 +75,13 @@ def read_file_from_ui_or_fs():
 
 def show_download_sidebar():
     with st.sidebar:
+        st.divider()
         with open(RESULT_FILE, "rb") as file:
             file_bytes = file.read()
-        st.download_button(
-            label="Download data as CSV",
-            data=file_bytes,
-            file_name="complete_set.csv",
-            mime="text/csv",
-        )
+        st.download_button(label="Download",data=file_bytes,file_name="complete_set.csv",mime="text/csv",)
+        if st.button("Clear file"):
+            os.remove(RESULT_FILE)
+
 
 def save_results(count,result_df):
     if count>0:
@@ -99,8 +103,8 @@ def run_all_models(df,model_list,run_count):
                 for _,row in df.iterrows():
                     user_input=row['Prompt']
                     update_ui.write(f"Completed {current_count}/{total_count} steps. {i=}, {model_choice=}, {user_input=}")
-                    rsp = apply_model(models[model_choice],user_input)
-                    results.append({'model':model_choice,'prompt':user_input,'response':rsp})
+                    rsp,elapsed_time = apply_model(models[model_choice],user_input)
+                    results.append({'model':model_choice,'prompt':user_input,'response':rsp,'time_seconds':elapsed_time,'current_date':current_date})
                     current_count+=1
                     progress_bar.progress( (1.0*current_count) / total_count)
 
@@ -117,7 +121,7 @@ st.title("Sentio")
 update_ui=st.empty()
 df = read_file_from_ui_or_fs()
 models=initialize_models()
-show_download_sidebar()
+
     
 if df is not None:
     with st.sidebar.expander("Prompts"):
@@ -127,6 +131,7 @@ if df is not None:
     run_count=st.sidebar.number_input("Runs",min_value=1,max_value=100, value=1)
     if st.sidebar.button("Run"):
         run_all_models(df,model_list,run_count)
+show_download_sidebar()
 
 
   
