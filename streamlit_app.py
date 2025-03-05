@@ -77,38 +77,41 @@ if df is not None:
     model_list={key:models[key] for key in options}
     run_count=st.sidebar.number_input("Runs",min_value=1,max_value=100, value=1)
     if st.sidebar.button("Run"):
-        update_ui.write(f"Starting run with {run_count=} for {models=}")
-        current_count=0
-        total_count=run_count*len(model_list)*df.shape[0]
-        progress_bar=st.progress(current_count)
-        results=[]
-        for i in range(1,run_count+1):
-            for model_choice in model_list.keys():
-                model_selected=models[model_choice]
+        with st.spinner("Running...", show_time=True):
+            update_ui.write(f"Starting run with {run_count=} for {models=}")
+            current_count=0
+            total_count=run_count*len(model_list)*df.shape[0]
+            progress_bar=st.progress(current_count)
+            results=[]
+            for i in range(1,run_count+1):
+                for model_choice in model_list.keys():
+                    model_selected=models[model_choice]
 
-                for index,row in df.iterrows():
-                    user_input=row['Prompt']
-                    update_ui.write(f"Completed {current_count}/{total_count} steps. {i=}, {model_choice=}, {user_input=}")
-                    rsp = apply_model(model_selected,user_input)
-                    results.append({'model':model_choice,'prompt':user_input,'response':rsp})
-                    current_count+=1
-                    progress_bar.progress( (1.0*current_count) / total_count)
-                    #st.write(f"Record: {index=},{user_input=},{rsp=}")
-        update_ui.write(f"All done!!")
-        result_df=pd.DataFrame(results)
-        st.dataframe(result_df,hide_index=True)
-        if current_count>0:
-            if os.path.exists(RESULT_FILE):
-                result_df.to_csv(RESULT_FILE,mode='a', index=False, header=False)
-            else:
-                result_df.to_csv(RESULT_FILE, index=False)
-            with open(RESULT_FILE, "rb") as file:
-                file_bytes = file.read()
-            st.download_button(
-                label="Download data as CSV",
-                data=file_bytes,
-                file_name="complete_set.csv",
-                mime="text/csv",
-            )
+                    for index,row in df.iterrows():
+                        user_input=row['Prompt']
+                        update_ui.write(f"Completed {current_count}/{total_count} steps. {i=}, {model_choice=}, {user_input=}")
+                        rsp = apply_model(model_selected,user_input)
+                        results.append({'model':model_choice,'prompt':user_input,'response':rsp})
+                        current_count+=1
+                        progress_bar.progress( (1.0*current_count) / total_count)
+                        #st.write(f"Record: {index=},{user_input=},{rsp=}")
+            update_ui.write(f"All done!!")
+            result_df=pd.DataFrame(results)
+            st.dataframe(result_df,hide_index=True)
+            if current_count>0:
+                if os.path.exists(RESULT_FILE):
+                    result_df.to_csv(RESULT_FILE,mode='a', index=False, header=False)
+                else:
+                    result_df.to_csv(RESULT_FILE, index=False)
+
+    with st.sidebar:
+        with open(RESULT_FILE, "rb") as file:
+            file_bytes = file.read()
+        st.download_button(
+            label="Download data as CSV",
+            data=file_bytes,
+            file_name="complete_set.csv",
+            mime="text/csv",
+        )
   
 
