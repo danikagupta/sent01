@@ -15,6 +15,7 @@ import pandas as pd
 
 import time
 from datetime import datetime
+from pathlib import Path
 
 PROMPT_FILE='data/prompts.csv'
 RESULT_FILE='data/results.csv'
@@ -74,13 +75,16 @@ def read_file_from_ui_or_fs():
     return None
 
 def show_download_sidebar():
-    with st.sidebar:
-        st.divider()
-        with open(RESULT_FILE, "rb") as file:
-            file_bytes = file.read()
-        st.download_button(label="Download",data=file_bytes,file_name="complete_set.csv",mime="text/csv",)
-        if st.button("Clear file"):
-            os.remove(RESULT_FILE)
+    file_path = Path(RESULT_FILE)
+
+    if file_path.exists():
+        with st.sidebar:
+            st.divider()
+            with open(RESULT_FILE, "rb") as file:
+                file_bytes = file.read()
+            st.download_button(label="Download",data=file_bytes,file_name="complete_set.csv",mime="text/csv",)
+            if st.button("Clear file"):
+                os.remove(RESULT_FILE)
 
 
 def save_results(count,result_df):
