@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Import Firebase configuration
-from firebase_config import initialize_firebase, upload_to_firestore
+from firebase_config import initialize_firebase, upload_to_firestore, get_all_firestore_records
 
 PROMPT_FILE='data/prompts.csv'
 RESULT_FILE='data/results.csv'
@@ -94,15 +94,51 @@ def read_file_from_ui_or_fs():
 def show_download_sidebar():
     file_path = Path(RESULT_FILE)
 
-    if file_path.exists():
-        with st.sidebar:
-            st.divider()
-            custom_filename = st.text_input("Download filename", value="complete_set.csv")
+    with st.sidebar:
+        st.divider()
+        st.subheader("Downloads")
+        
+        # Local file download
+        if file_path.exists():
+            st.markdown("**Current Run Results**")
+            custom_filename = st.text_input("Local results filename", value="complete_set.csv")
             with open(RESULT_FILE, "rb") as file:
                 file_bytes = file.read()
-            st.download_button(label="Download",data=file_bytes,file_name=custom_filename,mime="text/csv",)
-            if st.button("Clear file"):
+            st.download_button(
+                label="Download Local Results",
+                data=file_bytes,
+                file_name=custom_filename,
+                mime="text/csv",
+            )
+            if st.button("Clear local file"):
                 os.remove(RESULT_FILE)
+        
+        # Firestore records download
+        st.markdown("**Firestore Database Records**")
+        firebase_filename = st.text_input("Firestore results filename", value="firestore_records.csv")
+        if st.button("Download Firestore Records"):
+            # Initialize Firebase if not already initialized
+            if initialize_firebase():
+                records = get_all_firestore_records()
+                if records:
+                    df = pd.DataFrame(records)
+                    # Convert timestamp to string for CSV export
+                    if 'timestamp' in df.columns:
+                        df['timestamp'] = df['timestamp'].astype(str)
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="Download Firestore CSV",
+                        data=csv,
+                        file_name=firebase_filename,
+                        mime="text/csv",
+                        key="firebase_download"
+                    )
+                    st.write("Preview of Firestore Records:")
+                    st.dataframe(df, hide_index=True)
+                else:
+                    st.warning("No records found in Firestore database")
+            else:
+                st.error("Failed to initialize Firebase. Please check your credentials.")
 
 
 def save_results(count,result_df):
