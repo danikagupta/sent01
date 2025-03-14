@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+import uuid
 
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
@@ -16,6 +17,9 @@ import pandas as pd
 import time
 from datetime import datetime
 from pathlib import Path
+
+# Import Firebase configuration
+from firebase_config import initialize_firebase, upload_to_firestore
 
 PROMPT_FILE='data/prompts.csv'
 RESULT_FILE='data/results.csv'
@@ -59,6 +63,19 @@ def apply_model(model,user_input):
         return response.content, elapsed_time
     except Exception as e:
         return f"Error: {e}",0
+
+def upload_result_to_firestore(model_name, prompt, response, elapsed_time):
+    """Upload a single result to Firestore"""
+    data = {
+        'id': str(uuid.uuid4()),
+        'model': model_name,
+        'prompt': prompt,
+        'response': response,
+        'time_seconds': elapsed_time,
+        'timestamp': datetime.now().isoformat(),
+        'date': current_date
+    }
+    return upload_to_firestore(data)
     
 def read_file_from_ui_or_fs():
     with st.sidebar:
@@ -103,6 +120,13 @@ def run_all_models(df,model_list,run_count):
     results=[]
     total_start_time = time.time()
     
+    # Initialize Firebase for Firestore uploads
+    firebase_enabled = initialize_firebase()
+    if firebase_enabled:
+        st.sidebar.success("Firebase connection established. Results will be uploaded to Firestore.")
+    else:
+        st.sidebar.warning("Firebase connection not established. Results will only be saved locally.")
+    
     # Load previous results if they exist
     previous_results = None
     if os.path.exists(RESULT_FILE):
@@ -118,6 +142,13 @@ def run_all_models(df,model_list,run_count):
                     update_ui.write(f"Completed {current_count}/{total_count} steps. {i=}, {model_choice=}, {user_input=}")
                     rsp,elapsed_time = apply_model(models[model_choice],user_input)
                     results.append({'model':model_choice,'prompt':user_input,'response':rsp,'time_seconds':elapsed_time,'current_date':current_date})
+                    
+                    # Upload to Firestore
+                    if firebase_enabled:
+                        upload_success = upload_result_to_firestore(model_choice, user_input, rsp, elapsed_time)
+                        if upload_success:
+                            update_ui.write(f"Uploaded result to Firestore: {model_choice} - {user_input[:30]}...")
+                    
                     current_count+=1
                     progress_bar.progress( (1.0*current_count) / total_count)
 
@@ -138,6 +169,21 @@ st.title("Sentio")
 update_ui=st.empty()
 df = read_file_from_ui_or_fs()
 models=initialize_models()
+
+# Add Firebase configuration to secrets.toml if not already present
+if 'FIREBASE_CONFIG_ADDED' not in st.session_state:
+    with st.sidebar.expander("Firebase Configuration", expanded=False):
+        st.write("To enable Firestore uploads, add the following fields to your .streamlit/secrets.toml file:")
+        st.code("""
+        # Firebase Configuration
+        FIREBASE_PROJECT_ID = "your-project-id"
+        FIREBASE_PRIVATE_KEY_ID = "your-private-key-id"
+        FIREBASE_PRIVATE_KEY = "your-private-key"
+        FIREBASE_CLIENT_EMAIL = "your-client-email"
+        FIREBASE_CLIENT_ID = "your-client-id"
+        FIREBASE_CLIENT_X509_CERT_URL = "your-cert-url"
+        """)
+    st.session_state['FIREBASE_CONFIG_ADDED'] = True
 
     
 if df is not None:
