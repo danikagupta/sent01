@@ -80,9 +80,10 @@ def show_download_sidebar():
     if file_path.exists():
         with st.sidebar:
             st.divider()
+            custom_filename = st.text_input("Download filename", value="complete_set.csv")
             with open(RESULT_FILE, "rb") as file:
                 file_bytes = file.read()
-            st.download_button(label="Download",data=file_bytes,file_name="complete_set.csv",mime="text/csv",)
+            st.download_button(label="Download",data=file_bytes,file_name=custom_filename,mime="text/csv",)
             if st.button("Clear file"):
                 os.remove(RESULT_FILE)
 
@@ -100,6 +101,14 @@ def run_all_models(df,model_list,run_count):
     total_count=run_count*len(model_list)*df.shape[0]
     progress_bar=st.progress(current_count)
     results=[]
+    total_start_time = time.time()
+    
+    # Load previous results if they exist
+    previous_results = None
+    if os.path.exists(RESULT_FILE):
+        previous_results = pd.read_csv(RESULT_FILE)
+        st.subheader("Previous Results")
+        st.dataframe(previous_results, hide_index=True)
 
     with st.spinner("Running...", show_time=True):
         for i in range(1,run_count+1):
@@ -112,8 +121,12 @@ def run_all_models(df,model_list,run_count):
                     current_count+=1
                     progress_bar.progress( (1.0*current_count) / total_count)
 
-    update_ui.write(f"All done!!")
+    total_end_time = time.time()
+    total_elapsed_time = total_end_time - total_start_time
+    
+    update_ui.write(f"All done!! Total time taken: {total_elapsed_time:.2f} seconds")
     result_df=pd.DataFrame(results)
+    st.subheader("Current Run Results")
     st.dataframe(result_df,hide_index=True)
     save_results(current_count,result_df)
 
